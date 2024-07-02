@@ -1,0 +1,251 @@
+\documentclass{article}
+\usepackage{amsmath, amssymb, amsthm, centernot,cancel}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{amsfonts}
+\usepackage{cancel,xcolor,tikz,pgfplots,float,hyperref,algorithm,algpseudocode}
+\pgfplotsset{compat=1.18}
+
+\geometry{
+    top = 2cm,
+    left = 1.5cm,
+    right = 1.5cm,
+    bottom = 2cm,
+}
+
+\usepackage[backend=biber,style=numeric]{biblatex}
+\addbibresource{./reddibib.bib}
+\addbibresource{./adambib.bib}
+
+
+
+\setlength{\parindent}{0cm}
+\setlength{\headheight}{35pt}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\T}{\mathbb{T}}
+\newcommand{\Hb}{\mathbb{H}}
+\newcommand{\cadlag}{c\`{a}dl\`{a}g }
+
+
+\DeclareMathOperator{\prob}{\mathbb{P}}   %probability
+\DeclareMathOperator{\E}{\mathbb{E}}      %expectation
+\DeclareMathOperator{\Cov}{Cov}             %logarithmic integral
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\sgn}{sgn}
+
+\newcommand{\1}{\mathbf{1}}                 %indicator
+
+\newcommand{\calP}{\mathcal{P}}
+\newcommand{\calB}{\mathcal{B}}
+\newcommand{\calF}{\mathcal{F}}
+\newcommand{\calG}{\mathcal{G}}
+\newcommand{\calN}{\mathcal{N}}
+\newcommand{\calM}{\mathcal{M}}
+\newcommand{\calA}{\mathcal{A}}
+\newcommand{\calT}{\mathcal{T}}
+\newcommand{\bigO}{\mathcal{O}}
+\newcommand{\calS}{\mathcal{S}}
+\newcommand{\calC}{\mathcal{C}}
+
+\newcommand{\pvb}{\par\vspace{.3cm}}
+\newcommand{\pve}{\par\vspace{1cm}}
+\newcommand{\bmid}{\,\middle\vert\,}
+\newcommand{\note}[1]{{\textcolor{red}{note: #1}}}
+
+\begin{document}
+\thispagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\large\textbf{AdamW can Fail}}
+\fancyhead[R]{Miles Pophal \\ 
+            Date: \today 
+}
+\section*{Review of Adam Failure Proof}
+We start with the Adam Algorithm with bias correction \(\hat{m},\hat{v}\) although it may be removed for simplicity. 
+\begin{algorithm}
+    \caption{The Adam Algorithm}\label{alg:Adam}
+\begin{algorithmic}
+    \Require \(x_1\in\calF\) initial point, \(\{\alpha_t\}_{t=1}^T\) step sizes, \(\beta_1,\beta_2\geq 0\) and \(\alpha<\sqrt{1-\beta_2}\).  
+    \State $m_0,v_0  \gets 0$ 
+    \For{$t=1,\dots,T$}
+        \State \(g_t\gets \nabla f_t(x_t)\) 
+        \State \(m_t \gets \beta_1 m_{t-1} + (1-\beta_1)g_t \) 
+        \State \(v_t \gets \beta_2 v_{t-1} + (1-\beta_2)g_t^2 \)
+        \State \(\hat{m}_t \gets m_t/(1-\beta_1^t) \) 
+        \State \(\hat{v}_t \gets v_t/(1-\beta_2^t)\) 
+        \State \(\hat{x}_{t+1} \gets x_t - \alpha_t \hat{m}_t/\sqrt{\hat{v}_t }\)
+        \State \(x_{t+1} \gets \Pi_\calF(\hat{x}_{t+1})\)\Comment{Projection}
+    \EndFor
+    \State \Return \(x_T\)
+    \end{algorithmic}
+    \end{algorithm}
+Our candidate for the counterexample is \(\calF=[-1,1]\) and for some \(C>2\), 
+\begin{align*}
+    f_t(x) = \begin{cases}
+        Cx, & t\mod 3 = 1\\ 
+        -x, & \text{else}
+    \end{cases} \implies \nabla f_t(\cdot) = \begin{cases}
+        C, & t\mod 3 = 1\\ 
+        -1, & \text{else}
+    \end{cases}
+\end{align*}
+we can see \(x=-1\) produces minimal regret because for fixed \(x\) the regret cycles as 
+\begin{align*}
+Cx + (-x) + (-x) = (C-2)x.
+\end{align*}
+This is monotonic increasing on \([-1,1]\) and hence has the minimum at \(x=-1\). WLOG let \(x_1 = 1\) (translate the system otherwise), \(\beta_1=0,\beta_2 = 1/(1+C^2)\) to satisfy \(\beta_1^2 \leq \sqrt{\beta_2}\) from theorem 4.1 in \cite{kingma2017adam}. We also set \(\alpha_t = \alpha_{\sqrt{t}}\), although the experiments show that it holds even with the default setting for learning rate. As in the paper, we prove \(x_t>0\) with \(x_{3t+1}=1\) (this allows us to keep cyclic behavior) via induction (base case done by assumption). Our assumption is \(x_{3t+1}=1\) and \(x_t>0\) up until the fixed \(3t+1\). From the definition of Adam \ref{alg:Adam}, the \(3t+2\) update is given by 
+\begin{align*}
+\beta_1 = 0\implies m_t = g_t = \hat{m}_t
+\end{align*}
+so \(m_{3t+1} = C\). Hence, 
+\begin{equation}
+\hat{x}_{3t+2} \geq x_{3t+1} - \frac{\alpha C}{\sqrt{(3t+1)(\beta_2 v_{3t} + (1-\beta_2)C^2)}} = 1 -  \frac{\alpha C}{\sqrt{(3t+1)(\beta_2 v_{3t}+(1-\beta_2 C^2))}}, \label{eq:xhat3t1}
+\end{equation}
+where we substitute in \(\alpha_{3t+1} = \alpha/\sqrt{3t+1}\) and likewise the update for \(\sqrt{\hat{v}_{3t+1}}\). The reason for the inequality is because \(\hat{v}\geq v\) and since we take \(v\) here, it becomes a lower bound (note Reddi et. al. noted the analysis is similar, but they ignored this term). Since \(\beta_2v_{3t}\) is positive, removing it from the denominator increases the value, hence 
+\begin{align*}
+    \frac{\alpha C}{\sqrt{(3t+1)(\beta_2 v_{3t}+(1-\beta_2 C^2))}} \leq \frac{\alpha C}{\sqrt{(3t+1)(1-\beta_2 C^2)}} =  \frac{\alpha}{\sqrt{(3t+1)(1-\beta_2)}}
+\end{align*}
+because the \(C\) terms cancel. This can be bounded strictly by \(1\) because \(\alpha<\sqrt{1-\beta_2}\), so 
+\begin{align*}
+    \frac{\alpha}{\sqrt{(3t+1)(1-\beta_2)}} < \frac{\sqrt{1-\beta_2}}{\sqrt{(3t+1)(1-\beta_2)}} = \frac{1}{\sqrt{3t+1}} < 1
+\end{align*}
+and hence, \(0<\hat{x}_{3t+2}<1\). When we project this to get \(x_{3t+2}=\Pi_\calF(\hat{x}_{3t+2}) = \hat{x}_{3t+2}\) because it already is inside \([-1,1]\). Furthermore because it is strictly positive, 
+\begin{equation}
+\hat{x}_{3t+3} = x_{3t+2} + \frac{\alpha}{\sqrt{(3t+2)(\beta_2 v_{3t+1}+(1-\beta_2))}} > 0 \label{eq:xhat3t2}
+\end{equation}
+since \(\alpha>0\) and the gradient is \(-1\) which flips the sign. Hence, \(\hat{x}_{3t+3}>0\), but it may also be above 1 so all we can say for the \(x_{3t+4}\) iterate is 
+\begin{align*}
+\hat{x}_{3t+4} = x_{3t+3} + \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}} = \min\{\hat{x}_{3t+3},1\} + \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}}
+\end{align*}
+as the minimum is the projection operation when we know the inside is positive. If \(\hat{x}_{3t+3}\geq 1\), we are done because adding to a positive term makes \(\hat{x}_{3t+4}\geq 1 \implies x_{3t+4}=1\) which is what we want to prove. Otherwise, we have 
+\begin{align*}
+    \hat{x}_{3t+4} = \underbrace{\hat{x}_{3t+3}}_{\text{equal to projection}} + \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}},
+\end{align*}
+and we can then unwind this all the way back to the known quantity \(\hat{x}_{3t+2}\) to get 
+\begin{align*}
+    \hat{x}_{3t+4} = x_{3t+2} + \frac{\alpha}{\sqrt{(3t+2)(\beta_2 v_{3t+1}+(1-\beta_2))}} + 
+    \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}}
+\end{align*}
+by substituting in equation \eqref{eq:xhat3t2}. As we showed \(x_{3t+2}=\hat{x}_{3t+2}\), we can perform one more unwind to get 
+\begin{align*}
+    \hat{x}_{3t+4} &\geq 
+    1 -  \underbrace{\frac{\alpha C}{\sqrt{(3t+1)(\beta_2 v_{3t}+(1-\beta_2 C^2))}}}_{:=T_1}\qquad\left\{\text{unwound }x_{3t+2}\right. \\ 
+    &+ \underbrace{\frac{\alpha}{\sqrt{(3t+2)(\beta_2 v_{3t+1}+(1-\beta_2))}} + 
+    \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}}}_{:=T_2},
+\end{align*}
+using equation \eqref{eq:xhat3t1}. Now we just have to show \(T_1 \leq T_2\) like we did for the iterate \(x_{3t+2}\). Following that train, using the fact \(v_{3t}\) is positive, we can say 
+\begin{equation}
+ T_1 \leq \frac{\alpha}{\sqrt{(3t+1)(1-\beta_2)}}. \label{eq:T1}
+\end{equation}
+Next, we can note because \(v_t\) is a convex combination of \(v_{t-1}\) and \(g_t^2\), we can say \(v_{t}\leq C^2\) for all \(t\) (since each gradient is bounded by \(C\) too) using induction. With this bound, we can use it as a lower bound because it's in the denominator to get 
+\begin{align*}
+T_2  \geq \frac{\alpha}{\sqrt{\beta_2 C^2 + (1-\beta_2)}}\left(\frac{1}{\sqrt{3t+2}} + \frac{1}{\sqrt{3t+3}}\right).
+\end{align*}
+We would like to get the denominators like \(3t+1\) to compare with \(T_1\) while bounding this from below, but immediately reducing them actually decreases the denominator and ruins the lower bound. We can also multiply everything inside by 2 because \(2(3t+1)> 3t+3>3t+2\) for all \(t\geq 1\). Hence, 
+\begin{align*}
+T_2 \geq \frac{\alpha}{\sqrt{\beta_2 C^2 + (1-\beta_2)}}\left(\frac{1}{\sqrt{2(3t+1)}} + \frac{1}{\sqrt{2(3t+1)}}\right) = \frac{\alpha\sqrt{2}}{(3t+1)(\beta_2 C^2 + (1-\beta_2))}.
+\end{align*}
+For this to be comparable we need to get rid of the \(\sqrt{2}\) and fix the denominator, i.e., we want (compare with \(T_1\) in equation \eqref{eq:T1})
+\begin{align}
+\frac{\sqrt{2}}{\sqrt{\beta_2 C^2 + (1-\beta_2)}} = \frac{1}{\sqrt{(1-\beta_2)}} &\iff 2(1-\beta_2) = \beta_2 C^2 + 1 - \beta_2 \\ 
+& \iff 2-\beta_2 = \beta_2 C^2 + 1 \iff 1 = \beta_2 + \beta_2 C^2 \iff \beta_2 = \frac{1}{1+C^2}, \label{eq:beta2}
+\end{align}
+motivating our choice for this \(\beta_2\). Hence, 
+\begin{align*}
+T_2 \geq \frac{\alpha\sqrt{2}}{(3t+1)(\beta_2 C^2 + (1-\beta_2))} = \frac{\alpha}{(3t+1)(1-\beta_2)} = T_1 \implies \hat{x}_{3t+4} > 1
+\end{align*}
+and therefore \(x_{3t+4}=\Pi_\calF(\hat{x}_{3t+4})=1\) as desired and hence, we are done. \pve 
+This is a counterexample because if we look at the regret along a cycle, we have 
+\begin{align*}
+f_{3t+1}(x_{3t+1}) + f_{3t+2}(x_{3t+2}) + f_{3t+3}(x_{3t+3}) = C - x_{3t+2} - x_{3t+3} \geq C - 2
+\end{align*}
+as both \(x_{3t+2},x_{3t+3}\leq 1\). We compare this with the optimal \(x=-1\) to see 
+\begin{align*}
+    f_{3t+1}(-1) + f_{3t+2}(-1) + f_{3t+3}(-1) = -C + 2 \implies R \geq (C-2) - (-C+2) = 2C - 4
+\end{align*}
+and hence for each cycle the regret will increase as \(C>2\). Since this happens every 3 timesteps, the average regret 
+\begin{align*}
+R_T/T \geq \frac{1}{3} [2C-4] \centernot\to 0
+\end{align*}
+giving us the counterexample. 
+\section*{\textit{Ada}pted to AdamW}
+For AdamW, we have the algorithm \ref{alg:AdamW} below. 
+\begin{algorithm}
+    \caption{The AdamW Algorithm}\label{alg:AdamW}
+\begin{algorithmic}
+    \Require \(x_1\in\calF\) initial point, \(\{\alpha_t\}_{t=1}^T\) step sizes, \(\beta_1,\beta_2\geq 0\) and \(\alpha<\sqrt{1-\beta_2}\).  
+    \State $m_0,v_0  \gets 0$ 
+    \For{$t=1,\dots,T$}
+        \State \(g_t\gets \nabla f_t(x_t)\) 
+        \State \(x_t \gets (1-\alpha_t\gamma)x_{t-1}\)
+        \State \(m_t \gets \beta_1 m_{t-1} + (1-\beta_1)g_t \) 
+        \State \(v_t \gets \beta_2 v_{t-1} + (1-\beta_2)g_t^2 \)
+        \State \(\hat{m}_t \gets m_t/(1-\beta_1^t) \) 
+        \State \(\hat{v}_t \gets v_t/(1-\beta_2^t)\) 
+        \State \(\hat{x}_{t+1} \gets x_t - \alpha_t \hat{m}_t/\sqrt{\hat{v}_t }\)
+        \State \(x_{t+1} \gets \Pi_\calF(\hat{x}_{t+1})\)\Comment{Projection}
+    \EndFor
+    \State \Return \(x_T\)
+\end{algorithmic}
+\end{algorithm}
+for weight decay parameter \(\gamma\) with default initialization \(\gamma = 1/100\). Instead of showing all terms are positive, we can try and show each is bounded below by \(1/2\). If we repeat the same calculation for \(\hat{x}_{3t+2}\), we have 
+\begin{align*}
+    \hat{x}_{3t+2} \geq \left(1-\alpha_{3t+1}\gamma\right)x_{3t+1} - \frac{\alpha C}{\sqrt{(3t+1)(\beta_2 v_{3t} + (1-\beta_2)C^2)}} =  \left(1- \frac{\gamma\alpha}{\sqrt{3t+1}}\right) -  \frac{\alpha C}{\sqrt{(3t+1)(\beta_2 v_{3t}+(1-\beta_2 C^2))}},
+\end{align*}
+meaning we now want 
+\begin{align*}
+    \frac{\alpha}{\sqrt{(3t+1)(1-\beta_2)}} < \left(1- \frac{\alpha\gamma}{\sqrt{3t+1}}\right).
+\end{align*}
+We can use the same assumption on \(\alpha<\sqrt{1-\beta_2}\) and bring the decay term over to say 
+\begin{align*}
+    \frac{\alpha}{\sqrt{(3t+1)(1-\beta_2)}} + \frac{\gamma\alpha}{\sqrt{3t+1}} \leq \frac{1 + \gamma\alpha}{\sqrt{3t+1}} < 1/2 < 1
+\end{align*}
+and this time we can use the bound \(\alpha<1\) to conclude because \(\gamma\) is small already. Hence, \(1/2<\hat{x}_{3t+2}<1\), but if there isn't a \(t:x_{3t+1}=1\), take \(t=0\) and note the above still holds. Therefore,  
+\begin{align*}
+\hat{x}_{3t+3} =\left(1 - \frac{\gamma\alpha}{\sqrt{3t+2}}\right) x_{3t+2} + \frac{\alpha}{\sqrt{(3t+2)(\beta_2 v_{3t+1}+(1-\beta_2))}} > 1/2
+\end{align*}
+because 
+\begin{align*}
+    \hat{x}_{3t+3} &\geq \left(1 - \frac{\gamma\alpha}{\sqrt{3t+2}}\right) \frac{1}{2} + \frac{\alpha}{\sqrt{(3t+2)(\beta_2 v_{3t+1}+(1-\beta_2))}} > 1/2 \\ 
+    &\iff \frac{\gamma\alpha}{\sqrt{3t+2}} < \frac{\alpha}{\sqrt{(3t+2)(\beta_2 v_{3t+1}+(1-\beta_2))}},
+\end{align*}
+which happens when 
+\begin{align*}
+    \gamma &\leq \frac{1}{\sqrt{\beta_2C^2 + (1-\beta_2)}} \leq \frac{1}{\sqrt{\beta_2v_{3t+2} + (1-\beta_2)}},
+\end{align*}
+and by our choice of \(\beta_2 = 1/(1+C^2)\), we have 
+\begin{equation}
+\gamma \leq \frac{1}{\sqrt{2(1-\beta_2)}} = \sqrt{\frac{C^2+1}{2C^2}} \label{eq:gamma}
+\end{equation}
+following the calculations in equation \(\eqref{eq:beta2}\). All that remains is finding conditions such that \(\hat{x}_{3t+4}> 1/2\) to force \(x_{3t+4} = 1\). If \((1-\alpha_{3t+3}\gamma)x_{3t+3}\geq 1/2\), we are done and otherwise,
+\begin{align*}
+    \hat{x}_{3t+4} &= (1-\alpha_{3t+3}\gamma)x_{3t+3} + \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}} \\ &\geq \left(1-\frac{\alpha\gamma}{\sqrt{3t+3}}\right)\frac{1}{2} + \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}},
+\end{align*}
+then
+\begin{align*}
+    1/2-\frac{\alpha\gamma}{\sqrt{3t+3}} + \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}} \stackrel{?}{>} 1/2 
+\end{align*}
+whenever we have 
+\begin{align*}
+    \frac{\alpha\gamma}{\sqrt{3t+3}} &\leq \frac{\alpha}{\sqrt{(3t+3)(\beta_2v_{3t+2}+(1-\beta_2))}} \\ 
+    \gamma &\leq \frac{1}{\sqrt{\beta_2C^2 + (1-\beta_2)}} \leq \frac{1}{\sqrt{\beta_2v_{3t+2} + (1-\beta_2)}},
+\end{align*}
+which we know to be true from the same remarks about equation \eqref{eq:beta2} shown in equation \eqref{eq:gamma}. This is relatively tame because \((C^2+1)/C^2\) is monotonically decreasing and in the limit we require \(\gamma \leq 1/\sqrt{2}\) which should always be satisfied. Now we have established \(x_{t}>1/2\) for all \(t\), so our regret bound becomes (even though no longer cyclic)
+\begin{align*}
+f_{3t+1}(x_{3t+1}) + f_{3t+2}(x_{3t+2}) + f_{3t+3}(x_{3t+3}) = C x_{3t+1} - x_{3t+2} - x_{3t+3} \geq C/2 - 2
+\end{align*} 
+with the same optimal \(-C+2\) making our regret over this interval 
+\begin{align*}
+R \geq C/2 - 2 - (-C+2) = \frac{3C}{2} - 4 > 0 \iff 3C > 8 
+\end{align*}
+is our necessary condition. Note this is satisfied in my experiments where I let \(C=4\). By summing over intervals of this type, we have 
+\begin{align*}
+R_T \sim \sum_{t=1}^{T/3}  [f_{3t+1}(x_{3t+1}) + f_{3t+2}(x_{3t+2}) + f_{3t+3}(x_{3t+3}) - f_{3t+1}(-1) + f_{3t+2}(-1) + f_{3t+3}(-1)] \geq \frac{T}{3} \left(\frac{3C}{2} - 4\right)
+\end{align*}
+showing that \(R_T/T \centernot\to 0\) as \(T\to+\infty\). 
+\end{document}
